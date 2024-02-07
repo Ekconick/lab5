@@ -90,7 +90,7 @@ Once you are done setting up the project, you can now start working with the MET
 
 1. Load the `data.table` (and the `dtplyr` and `dplyr` packages), `mgcv`, `ggplot2`, `leaflet`, `kableExtra`.
 
-```{r packages warnings=FALSE}
+```{r packages,warnings=FALSE}
 library(data.table)
 library(dtplyr)
 library(dplyr)
@@ -101,16 +101,27 @@ library(kableExtra)
 ```
 
 
-```{r, eval=FALSE}
+```{r}
 fn <- "https://raw.githubusercontent.com/JSC370/JSC370-2024/main/data/met_all_2023.gz"
 if (!file.exists("met_all_2023.gz"))
   download.file(fn, destfile = "met_all_2023.gz")
 met <- data.table::fread("met_all_2023.gz")
+
+# Some EDA codes from last week
+met$lat <- met$lat/1000
+met$lon <- met$lon/1000
+met$wind.sp <- met$wind.sp/10
+met$temp <- met$temp/10
+met$dew.point <- met$dew.point/10
+met$atm.press <- met$atm.press/10
+
+# Relative Humidity
+met$rh <- 100*((112-0.1*met$temp+met$dew.point)/(112+0.9*met$temp))^8
 ```
 
 2. Load the met data from https://github.com/JSC370/JSC370-2024/main/data/met_all_2023.gz or  (Use https://raw.githubusercontent.com/JSC370/JSC370-2024/main/data/met_all_2023.gz to download programmatically), and also the station data. For the latter, you can use the code we used during lecture to pre-process the stations data:
 
-```{r stations-data, eval = FALSE}
+```{r}
 # Download the data
 stations <- fread("ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.csv")
 stations[, USAF := as.integer(USAF)]
@@ -136,7 +147,8 @@ stations <- stations[n == 1,][, n := NULL]
 3. Merge the data as we did during the lecture. Use the `merge()` code and you can also try the tidy way with `left_join()`
 
 ```{r}
-
+names(stations)[names(stations) == "USAF"] <- "USAFID"
+merged_data <- merge(stations, met, by = "USAFID")
 ```
 
 ## Question 1: Identifying Representative Stations
@@ -144,13 +156,36 @@ stations <- stations[n == 1,][, n := NULL]
 Across all weather stations, which stations have the median values of temperature, wind speed, and atmospheric pressure? Using the `quantile()` function, identify these three stations. Do they coincide?
 
 ```{r}
-
+median_temp <- median(merged_data$temp, na.rm = TRUE)
+median_wind_sp <- median(merged_data$wind.sp, na.rm = TRUE)
+median_press <- median(merged_data$atm.press, na.rm = TRUE)
 ```
+
+```{r}
+library(dplyr)
+
+station_medians <- merged_data %>%
+  group_by(USAFID) %>%
+  summarise(
+    median_temperature = median(temp, na.rm = TRUE),
+    median_wind_speed = median(wind.sp, na.rm = TRUE),
+    median_pressure = median(atm.press, na.rm = TRUE)
+  )
+
+matching_stations <- station_medians %>%
+  filter(
+    median_temperature == median_temp,
+    median_wind_speed == median_wind_sp,
+    median_pressure == median_press
+  )
+```
+
+Yes, there is coincidence.
 
 Next identify the stations have these median values.
 
 ```{r}
-
+print(matching_stations$USAFID)
 ```
 
 Knit the document, commit your changes, and save it on GitHub. Don't forget to add `README.md` to the tree, the first time you render it.
