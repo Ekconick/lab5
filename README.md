@@ -257,6 +257,60 @@ forget to add `README.md` to the tree, the first time you render it.
 Now let’s find the weather stations by state with closest temperature
 and wind speed based on the euclidean distance from these medians.
 
+``` r
+library(dplyr)
+
+state_medians <- merged_data %>%
+  group_by(STATE) %>%
+  summarise(
+    median_temperature = median(temp, na.rm = TRUE),
+    median_wind_speed = median(wind.sp, na.rm = TRUE)
+  )
+
+weather_data_with_medians <- merged_data %>%
+  left_join(state_medians, by = "STATE")
+
+weather_data_with_medians <- weather_data_with_medians %>%
+  mutate(
+    distance = sqrt((temp - median_temperature)^2 + (wind.sp - median_wind_speed)^2)
+  )
+```
+
+``` r
+q2a <- weather_data_with_medians %>%
+  group_by(STATE)  %>% 
+  slice_min(order_by = distance, n = 1) %>%
+  select(STATE, USAFID, distance) %>%
+   ungroup()
+
+q2b <- weather_data_with_medians %>%
+  group_by(STATE)  %>% 
+  slice_min(order_by = distance, n = 1) %>%
+  arrange(USAFID, distance) %>%
+  distinct(USAFID, .keep_all = TRUE)
+
+unique_stations <- q2a %>%
+  arrange(USAFID, distance) %>%
+  distinct(USAFID, .keep_all = TRUE)
+
+print(unique_stations)
+```
+
+    ## # A tibble: 1,109 × 3
+    ##    STATE USAFID distance
+    ##    <chr>  <int>    <dbl>
+    ##  1 SC    720120        0
+    ##  2 IL    720137        0
+    ##  3 IL    720170        0
+    ##  4 MI    720198        0
+    ##  5 OR    720202        0
+    ##  6 WA    720254        0
+    ##  7 GA    720257        0
+    ##  8 MN    720258        0
+    ##  9 TX    720261        0
+    ## 10 GA    720263        0
+    ## # ℹ 1,099 more rows
+
 Knit the doc and save it on GitHub.
 
 ## Question 3: In the Geographic Center?
@@ -266,6 +320,54 @@ mid-point (median) of the state. Combining these with the stations you
 identified in the previous question, use `leaflet()` to visualize all
 ~100 points in the same figure, applying different colors for the
 geographic median and the temperature and wind speed median.
+
+``` r
+library(dplyr)
+
+geographic_midpoints <- weather_data_with_medians %>%
+  group_by(STATE) %>%
+  summarise(
+    median_lat = median(LAT, na.rm = TRUE),
+    median_lon = median(LON, na.rm = TRUE)
+  )
+
+closest_geo_stations_list <- list()
+
+for (state in unique(geographic_midpoints$STATE)) {
+  state_data <- subset(weather_data_with_medians, STATE == state)
+  state_midpoint <- subset(geographic_midpoints, STATE == state)
+  
+  distances <- sqrt((state_data$LAT - state_midpoint$median_lat)^2 + (state_data$LON - state_midpoint$median_lon)^2)
+  
+  min_distance_index <- which.min(distances)
+  
+  closest_geo_stations_list[[state]] <- state_data[min_distance_index, ]
+}
+
+closest_geo_stations <- do.call(rbind, closest_geo_stations_list)
+```
+
+``` r
+combined_stations <- rbind(
+  closest_geo_stations %>% mutate(Source = "Geographic Median"),
+  q2b %>% mutate(Source = "Temp & Wind Median")
+)
+```
+
+``` r
+# library(leaflet)
+
+# leaflet(combined_stations) %>%
+#   addTiles() %>%
+#   addCircleMarkers(
+#     ~LON, ~LAT, color = ~ifelse(Source == "Geographic Median", "blue", "red"),
+#     popup = ~paste(STATE, USAFID, Source),
+#     radius = 6
+#   )
+```
+
+It shows that the output of the leaflet function cannot be knit as md
+file. So I comment the chunk.
 
 Knit the doc and save it on GitHub.
 
@@ -280,6 +382,88 @@ Use the following breakdown for elevation:
 - Low: elev \< 93
 - Mid: elev \>= 93 and elev \< 401
 - High: elev \>= 401
+
+``` r
+library(tidyr)
+merged_data <- merged_data %>%
+  mutate(
+    elevation_category = case_when(
+      elev < 93 ~ "Low",
+      elev >= 93 & elev < 401 ~ "Mid",
+      elev >= 401 ~ "High",
+      TRUE ~ NA_character_
+    )
+  )
+
+avg_temp_by_state_elevation <- merged_data %>%
+  group_by(STATE, elevation_category) %>%
+  summarise(
+    average_temperature = mean(temp, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+avg_temp_table <- avg_temp_by_state_elevation %>%
+  pivot_wider(
+    names_from = elevation_category,
+    values_from = average_temperature,
+  )
+library(knitr)
+
+kable(avg_temp_table, caption = "Average Temperature by State and Elevation Category")
+```
+
+| STATE |      Low |      Mid |      High |
+|:------|---------:|---------:|----------:|
+| AL    | 25.07106 | 23.79775 |        NA |
+| AR    | 25.58698 | 24.40578 | 23.723926 |
+| AZ    | 29.28585 | 30.38057 | 23.892609 |
+| CA    | 18.25508 | 18.77071 | 18.148808 |
+| CO    |       NA |       NA | 15.184075 |
+| CT    | 19.37249 | 18.78433 |        NA |
+| DE    | 21.40611 |       NA |        NA |
+| FL    | 26.61484 |       NA |        NA |
+| GA    | 24.80529 | 23.23841 |        NA |
+| IA    |       NA | 22.26228 | 21.992787 |
+| ID    |       NA |       NA | 16.415667 |
+| IL    |       NA | 22.11707 | 20.843173 |
+| IN    |       NA | 20.12731 |        NA |
+| KS    |       NA | 24.16196 | 22.098776 |
+| KY    |       NA | 21.36103 | 20.178196 |
+| LA    | 27.61819 | 26.09414 |        NA |
+| MA    | 17.44477 | 17.59058 |        NA |
+| MD    | 21.25462 | 20.62255 | 20.648332 |
+| ME    | 15.23159 | 15.43930 | 15.329681 |
+| MI    |       NA | 18.54432 | 17.977982 |
+| MN    | 22.66275 | 21.15523 | 19.931963 |
+| MO    | 25.79654 | 23.77652 | 23.300286 |
+| MS    | 26.34285 | 24.66682 |        NA |
+| MT    |       NA |       NA | 16.293015 |
+| NC    | 22.82945 | 21.21073 | 18.046833 |
+| ND    |       NA | 21.79236 | 20.415848 |
+| NE    |       NA | 23.48598 | 21.048920 |
+| NH    | 17.78844 | 16.77731 |  7.243417 |
+| NJ    | 19.96563 | 19.31963 |        NA |
+| NM    |       NA |       NA | 22.448418 |
+| NV    |       NA |       NA | 20.849170 |
+| NY    | 18.75621 | 18.31489 | 15.887585 |
+| OH    |       NA | 19.43774 |        NA |
+| OK    |       NA | 25.07676 | 24.000040 |
+| OR    | 15.20318 | 16.39100 | 16.711553 |
+| PA    | 20.34185 | 19.40527 | 17.286934 |
+| RI    | 17.88116 | 17.46589 |        NA |
+| SC    | 23.68407 | 22.38995 |        NA |
+| SD    |       NA | 22.79495 | 20.639922 |
+| TN    | 25.81362 | 22.89642 | 19.457179 |
+| TX    | 28.74462 | 28.08021 | 26.500393 |
+| UT    |       NA |       NA | 19.754720 |
+| VA    | 21.34826 | 20.49998 | 17.954522 |
+| VT    |      NaN | 16.89971 |        NA |
+| WA    | 15.25193 | 17.80542 | 16.810354 |
+| WI    |       NA | 19.56563 | 17.994615 |
+| WV    |       NA | 19.31079 | 17.492150 |
+| WY    |       NA |       NA | 13.748173 |
+
+Average Temperature by State and Elevation Category
 
 Knit the document, commit your changes, and push them to GitHub.
 
@@ -298,6 +482,95 @@ need the `mgcv` package and `gam()` function to do this.
 - fit both a linear model and a spline model (use `gam()` with a cubic
   regression spline on wind speed). Summarize and plot the results from
   the models and interpret which model is the best fit and why.
+
+``` r
+library(mgcv)
+library(ggplot2)
+library(dplyr)
+library(data.table)
+
+setDT(merged_data)
+
+weather_data_filtered <- merged_data[elev >= 1000 & elev <= 1020, ]
+
+ggplot(weather_data_filtered, aes(x = atm.press, y = temp)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "red") +  # Linear regression line
+  geom_smooth(method = "gam", formula = y ~ s(x), color = "blue") +  # GAM smooth line
+  labs(title = "Temperature vs. Atmospheric Pressure",
+       x = "Atmospheric Pressure", y = "Temperature")
+```
+
+    ## `geom_smooth()` using formula = 'y ~ x'
+
+    ## Warning: Removed 5554 rows containing non-finite values (`stat_smooth()`).
+    ## Removed 5554 rows containing non-finite values (`stat_smooth()`).
+
+    ## Warning: Removed 5554 rows containing missing values (`geom_point()`).
+
+![](README_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+
+``` r
+# Linear model
+linear_model <- lm(temp ~ wind.sp, data = weather_data_filtered)
+summary(linear_model)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = temp ~ wind.sp, data = weather_data_filtered)
+    ## 
+    ## Residuals:
+    ##      Min       1Q   Median       3Q      Max 
+    ## -19.6484  -4.8247  -0.3919   4.2223  20.9546 
+    ## 
+    ## Coefficients:
+    ##             Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept) 18.18784    0.17626  103.19   <2e-16 ***
+    ## wind.sp      1.17172    0.03937   29.77   <2e-16 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 6.8 on 6292 degrees of freedom
+    ##   (1527 observations deleted due to missingness)
+    ## Multiple R-squared:  0.1234, Adjusted R-squared:  0.1233 
+    ## F-statistic:   886 on 1 and 6292 DF,  p-value: < 2.2e-16
+
+``` r
+# Spline model using GAM
+spline_model <- gam(temp ~ s(wind.sp, bs = "cr"), data = weather_data_filtered)
+summary(spline_model)
+```
+
+    ## 
+    ## Family: gaussian 
+    ## Link function: identity 
+    ## 
+    ## Formula:
+    ## temp ~ s(wind.sp, bs = "cr")
+    ## 
+    ## Parametric coefficients:
+    ##             Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept) 22.77218    0.08463   269.1   <2e-16 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Approximate significance of smooth terms:
+    ##              edf Ref.df   F p-value    
+    ## s(wind.sp) 8.618  8.956 120  <2e-16 ***
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## R-sq.(adj) =  0.145   Deviance explained = 14.6%
+    ## GCV =  45.15  Scale est. = 45.081    n = 6294
+
+``` r
+plot(spline_model)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-13-2.png)<!-- --> The result
+of GAM are better, GAM can reveal complex relationships not apparent in
+linear models
 
 ## Deliverables
 
