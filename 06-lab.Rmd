@@ -245,6 +245,9 @@ Done! Knit the document, commit, and push.
 
 ## Final Pro Tip (optional)
 
+https://htmlpreview.github.io/?https://github.com/Ekconick/lab5/blob/main/06-lab.html
+
+
 You can still share the HTML document on github. You can include a link in your `README.md` file as the following:
 
 ```md
@@ -252,6 +255,8 @@ View [here](https://cdn.jsdelivr.net/gh/:user/:repo@:tag/:file)
 ```
 
 For example, if we wanted to add a direct link the HTML page of lecture 6, we could do something like the following:
+
+
 
 ```md
 View Week 6 Lecture [here]()
