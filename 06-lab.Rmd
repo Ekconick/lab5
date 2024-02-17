@@ -37,18 +37,18 @@ Complete the lines of code:
 website <- xml2::read_html("https://pubmed.ncbi.nlm.nih.gov/?term=sars-cov-2")
 
 # Finding the counts
-counts <- xml2::xml_find_first(website, "[XPath]")
+counts <- xml2::xml_find_first(website, "/html/body/div[2]/div/div[3]/main/div[3]/div[3]/div[1]/div[2]/div[5]/table")
 
 # Turning it into text
 counts <- as.character(counts)
 
 # Extracting the data using regex
-stringr::str_extract(counts, "[REGEX FOR NUMBERS WITH COMMAS/DOTS]")
+stringr::str_extract(counts, "\\d{1,3}(?:[,.]\\d{3})*(?:\\.\\d+)?")
 ```
 
  - How many sars-cov-2 papers are there?
 
-_Answer here._
+2
 
 Don't forget to commit your work!
 
@@ -73,7 +73,7 @@ query_ids <- GET(
   query = list(
     db  = "pubmed",
     term = "covid19 toronto",
-    retmax = 300")
+    retmax = 300)
   
 )
 
@@ -147,9 +147,11 @@ Using the function `stringr::str_extract_all()` applied on `publications_txt`, c
 Write a regular expression that captures all such instances
 
 ```{r univ-institute-regex, eval = FALSE}
+library(stringr)
+
 institution <- str_extract_all(
   publications_txt,
-  "[YOUR REGULAR EXPRESSION HERE]"
+  "(University of [\\w\\s]+)|(\\w+\\s+Institute of [\\w\\s]+)"
   ) 
 institution <- unlist(institution)
 as.data.frame(table(institution))
@@ -165,7 +167,7 @@ And tabulate the results
 ```{r school-department, eval = FALSE}
 schools_and_deps <- str_extract_all(
   publications_txt,
-  "[YOUR REGULAR EXPRESSION HERE]"
+  "(School of [\\w\\s]+)|(Department of [\\w\\s]+)"
   )
 as.data.frame(table(schools_and_deps))
 ```
@@ -191,33 +193,47 @@ Now, extract the abstract and article title for each one of the elements of
 take advantage of vectorization of `stringr::str_extract`
 
 ```{r extracting-last-bit, eval = FALSE}
-abstracts <- str_extract(pub_char_list, "[YOUR REGULAR EXPRESSION]")
-abstracts <- str_remove_all(abstracts, "[CLEAN ALL THE HTML TAGS]")
-abstracts <- str_remove_all(abstracts, "[CLEAN ALL EXTRA WHITE SPACE AND NEW LINES]")
+abstracts <- str_extract(pub_char_list, "<AbstractText[^>]*>(.*?)</AbstractText>")
+abstracts <- str_remove_all(abstracts, "<[^>]+>")
+# abstracts <- str_remove_all(abstracts, "[CLEAN ALL EXTRA WHITE SPACE AND NEW LINES]")
+abstracts <- str_replace_all(abstracts, "\\s+", " ")
 # alternatively, you can also use str_replace_all(abstracts, "[ORIGINAL]", "[REPLACEMENT]")
+
+has_abstract <- sapply(pub_char_list, function(x) str_detect(x, "<AbstractText>"))
+
+num_without_abstract <- sum(!has_abstract)
+
+print(num_without_abstract)
+
 ```
 
   - How many of these don't have an abstract? 
+1
 
-_Answer here._
 
 Now, the title
 
 ```{r process-titles, eval = FALSE}
-titles <- str_extract(pub_char_list, "[YOUR REGULAR EXPRESSION]")
-titles <- str_remove_all(titles, "[CLEAN ALL THE HTML TAGS]")
+titles <- str_extract(pub_char_list, "<ArticleTitle>(.*?)</ArticleTitle>")
+titles <- str_remove_all(titles, "<[^>]+>")
+has_title <- sapply(pub_char_list, function(x) str_detect(x, "<ArticleTitle>"))
+
+num_without_title <- sum(has_title)
+
+print(num_without_title)
 ```
 
 - How many of these don't have a title ? 
 
-_Answer here._
+1
 
 Finally, put everything together into a single `data.frame` and use
 `knitr::kable` to print the results
 
 ```{r build-db, eval = FALSE}
 database <- data.frame(
-  "[DATA TO CONCATENATE]"
+  Titles = titles,
+  Abstracts = abstracts
 )
 knitr::kable(database)
 
